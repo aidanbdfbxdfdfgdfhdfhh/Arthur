@@ -1,306 +1,117 @@
-const API_BASE = 'https://backend-67bt.onrender.com';
+const BASE_URL = 'https://backend-67bt.onrender.com'; // your Render backend
+
 let currentUser = null;
-let authToken = null;
-let products = [];
 let cart = [];
+let products = [];
 
-// ---------------------------
-// Toast helper
-function showToast(msg, type='info'){
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.className = `toast show ${type}`;
-  clearTimeout(t._hide);
-  t._hide = setTimeout(()=> t.className='toast hidden',3000);
-}
-
-// ---------------------------
-// Fetch products from backend
-async function loadProducts(){
-  try{
-    const res = await fetch(`${API_BASE}/products`);
-    products = await res.json();
-    renderProducts();
-  }catch(e){
-    showToast('Could not load products','error');
-  }
-}
-
-// ---------------------------
-// Render products
-function renderProducts(){
-  const list = document.getElementById('product-list');
-  list.innerHTML='';
-  products.forEach(p=>{
-    const card = document.createElement('div');
-    card.className='card';
-    card.innerHTML=`
-      <img src="${p.img}" alt="${p.name}">
-      <h3>${p.name}</h3>
-      <p class="price">$${p.price.toFixed(2)}</p>
-      <div class="card-actions"></div>
-    `;
-    list.appendChild(card);
-    const actions = card.querySelector('.card-actions');
-
-    const addBtn = document.createElement('button');
-    addBtn.textContent='Add to cart';
-    addBtn.addEventListener('click',()=>addToCart(p.id));
-    actions.appendChild(addBtn);
-
-    if(currentUser?.isAdmin){
-      const rm = document.createElement('button');
-      rm.textContent='Remove product';
-      rm.className='remove-product';
-      rm.addEventListener('click',()=>removeProduct(p.id));
-      actions.appendChild(rm);
-    }
-  });
-}
-
-// ---------------------------
-// Auth
-async function signIn(username,password){
-  try{
-    const res = await fetch(`${API_BASE}/auth/signin`,{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({username,password})
-    });
-    if(!res.ok) throw new Error('Sign in failed');
-    const data = await res.json();
-    currentUser = data.user;
-    authToken = data.token;
-    updateUserUI();
-    loadCart();
-    showToast(`Welcome, ${currentUser.username}`,'success');
-    closeAuthModal();
-  }catch(e){
-    showToast(e.message,'error');
-  }
-}
-
-async function signUp(username,password){
-  try{
-    const res = await fetch(`${API_BASE}/auth/signup`,{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({username,password})
-    });
-    if(!res.ok) throw new Error('Sign up failed');
-    const data = await res.json();
-    currentUser = data.user;
-    authToken = data.token;
-    updateUserUI();
-    loadCart();
-    showToast(`Account created, welcome ${currentUser.username}`,'success');
-    closeAuthModal();
-  }catch(e){
-    showToast(e.message,'error');
-  }
-}
-
-function signOut(){
-  currentUser=null;
-  authToken=null;
-  cart=[];
-  updateUserUI();
-  showToast('Signed out','info');
+// --- Utilities ---
+async function fetchProducts() {
+  const res = await fetch(`${BASE_URL}/products`);
+  products = await res.json();
   renderProducts();
 }
 
-// ---------------------------
-// Update UI
-function updateUserUI(){
-  const authBtn=document.getElementById('auth-btn');
-  const banner=document.getElementById('current-user-banner');
-  const adminBtn=document.getElementById('admin-add-btn');
+async function renderCart() {
+  const cartContainer = document.getElementById('cart-items');
+  if (!cartContainer) return;
+  cartContainer.innerHTML = '';
+  if (!cart.length) return cartContainer.innerHTML = '<p>Your cart is empty.</p>';
 
-  if(currentUser){
-    authBtn.style.display='none';
-    banner.textContent=`Signed in: ${currentUser.username}`;
-    banner.classList.remove('hidden');
-    if(currentUser.isAdmin) adminBtn.classList.remove('hidden');
-    else adminBtn.classList.add('hidden');
-  }else{
-    authBtn.style.display='inline-block';
-    banner.classList.add('hidden');
-    adminBtn.classList.add('hidden');
-  }
-}
-
-// ---------------------------
-// Cart functions
-async function loadCart(){
-  if(!currentUser) return;
-  try{
-    const res=await fetch(`${API_BASE}/cart`,{
-      headers:{'Authorization':`Bearer ${authToken}`}
-    });
-    cart=await res.json();
-    updateCartCount();
-  }catch(e){
-    showToast('Could not load cart','error');
-  }
-}
-
-async function addToCart(productId){
-  if(!currentUser){ openAuthModal(); return; }
-  try{
-    await fetch(`${API_BASE}/cart/add`,{
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':`Bearer ${authToken}`},
-      body:JSON.stringify({productId})
-    });
-    await loadCart();
-    showToast('Added to cart','success');
-  }catch(e){ showToast('Failed to add','error'); }
-}
-
-async function removeFromCart(productId){
-  try{
-    await fetch(`${API_BASE}/cart/remove`,{
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':`Bearer ${authToken}`},
-      body:JSON.stringify({productId, qty:1})
-    });
-    await loadCart();
-  }catch(e){}
-}
-
-async function clearCart(){
-  try{
-    await fetch(`${API_BASE}/cart/clear`,{
-      method:'POST',
-      headers:{'Authorization':`Bearer ${authToken}`}
-    });
-    await loadCart();
-  }catch(e){}
-}
-
-// ---------------------------
-// Admin functions
-async function addProduct(name,price,img){
-  try{
-    const res = await fetch(`${API_BASE}/products`,{
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':`Bearer ${authToken}`},
-      body:JSON.stringify({name,price,img})
-    });
-    if(!res.ok) throw new Error('Failed');
-    await loadProducts();
-    showToast('Product added','success');
-  }catch(e){ showToast(e.message,'error'); }
-}
-
-async function removeProduct(id){
-  try{
-    const res = await fetch(`${API_BASE}/products/${id}`,{
-      method:'DELETE',
-      headers:{'Authorization':`Bearer ${authToken}`}
-    });
-    if(!res.ok) throw new Error('Failed');
-    await loadProducts();
-    showToast('Product removed','info');
-  }catch(e){ showToast(e.message,'error'); }
-}
-
-// ---------------------------
-// Modals
-function openAuthModal(){ document.getElementById('auth-modal').classList.remove('hidden'); }
-function closeAuthModal(){ document.getElementById('auth-modal').classList.add('hidden'); }
-function openAdminModal(){ document.getElementById('admin-modal').classList.remove('hidden'); }
-function closeAdminModal(){ document.getElementById('admin-modal').classList.add('hidden'); }
-function openCartModal(){ document.getElementById('cart-modal').classList.remove('hidden'); renderCartModal(); }
-function closeCartModal(){ document.getElementById('cart-modal').classList.add('hidden'); }
-
-function renderCartModal(){
-  const container = document.getElementById('cart-items');
-  const totalEl = document.getElementById('cart-total');
-  container.innerHTML='';
-  if(cart.length===0){ container.innerHTML='<p>Your cart is empty</p>'; totalEl.textContent='0.00'; return; }
-  let total=0;
-  cart.forEach(item=>{
-    total+=item.price;
-    const div=document.createElement('div');
-    div.className='cart-item';
-    div.innerHTML=`
+  const grouped = {};
+  cart.forEach(p => grouped[p.productId] = grouped[p.productId] ? {...grouped[p.productId], qty: grouped[p.productId].qty+1} : {...p, qty:1});
+  Object.values(grouped).forEach(item => {
+    const div = document.createElement('div');
+    div.className = 'cart-item';
+    div.innerHTML = `
       <img src="${item.img}" alt="${item.name}">
-      <div class="cart-item-info">
-        <div class="name">${item.name}</div>
-        <div class="meta">$${item.price.toFixed(2)}</div>
+      <div>
+        <div>${item.name}</div>
+        <div>$${item.price.toFixed(2)} × ${item.qty} = $${(item.price*item.qty).toFixed(2)}</div>
       </div>
-      <div class="cart-item-actions">
-        <button data-id="${item.id}" class="remove-one">Remove 1</button>
+      <div>
+        <button onclick="removeOne(${item.id})">Remove 1</button>
+        <button onclick="removeAll(${item.id})">Remove all</button>
       </div>
     `;
-    container.appendChild(div);
+    cartContainer.appendChild(div);
   });
-  totalEl.textContent=total.toFixed(2);
-  container.querySelectorAll('.remove-one').forEach(btn=>{
-    btn.addEventListener('click',()=> removeFromCart(Number(btn.dataset.id)));
+  document.getElementById('cart-total').textContent = cart.reduce((sum,p)=>sum+p.price,0).toFixed(2);
+}
+
+// --- Auth ---
+async function signUp(username,password) {
+  const res = await fetch(`${BASE_URL}/signup`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username,password}) });
+  if (!res.ok) return alert('Sign up failed');
+  currentUser = await res.json();
+  localStorage.setItem('currentUser', JSON.stringify(currentUser));
+  loadCart();
+  updateUI();
+}
+
+async function signIn(username,password) {
+  const res = await fetch(`${BASE_URL}/signin`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username,password}) });
+  if (!res.ok) return alert('Sign in failed');
+  currentUser = await res.json();
+  localStorage.setItem('currentUser', JSON.stringify(currentUser));
+  loadCart();
+  updateUI();
+}
+
+function signOut() {
+  currentUser = null;
+  cart = [];
+  localStorage.removeItem('currentUser');
+  updateUI();
+}
+
+// --- Cart actions ---
+async function loadCart() {
+  if (!currentUser) return;
+  const res = await fetch(`${BASE_URL}/cart/${currentUser.id}`);
+  cart = await res.json();
+  renderCart();
+}
+
+async function addToCart(productId) {
+  if (!currentUser) return alert('Sign in first');
+  await fetch(`${BASE_URL}/cart`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({userId:currentUser.id,productId}) });
+  loadCart();
+}
+
+// --- Render products ---
+function renderProducts() {
+  const list = document.getElementById('product-list');
+  list.innerHTML = '';
+  products.forEach(p => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <img src="${p.img}" alt="${p.name}" onerror="this.src='https://via.placeholder.com/400x300?text=No+Image'">
+      <h3>${p.name}</h3>
+      <p>$${p.price.toFixed(2)}</p>
+      <button onclick="addToCart(${p.id})">Add to cart</button>
+      ${currentUser?.isAdmin ? `<button onclick="deleteProduct(${p.id})">Remove product</button>` : ''}
+    `;
+    list.appendChild(card);
   });
 }
 
-// ---------------------------
-// Event listeners
-document.addEventListener('DOMContentLoaded',()=>{
-  loadProducts();
+async function deleteProduct(id) {
+  if (!currentUser?.isAdmin) return;
+  await fetch(`${BASE_URL}/products/${id}`, { method:'DELETE', headers:{'Content-Type':'application/json'}, body: JSON.stringify({admin:true}) });
+  fetchProducts();
+}
 
-  // auth
-  const authBtn=document.getElementById('auth-btn');
-  authBtn.addEventListener('click',openAuthModal);
-  document.getElementById('auth-close').addEventListener('click',closeAuthModal);
-  document.getElementById('auth-form').addEventListener('submit',e=>{
-    e.preventDefault();
-    const username=document.getElementById('auth-username').value.trim();
-    const password=document.getElementById('auth-password').value;
-    const mode=document.getElementById('auth-submit').textContent.toLowerCase();
-    if(mode==='sign in') signIn(username,password);
-    else signUp(username,password);
-  });
+// --- UI updates ---
+function updateUI() {
+  document.getElementById('auth-btn').style.display = currentUser ? 'none' : 'inline-block';
+  document.getElementById('user-greeting').textContent = currentUser ? `Hello ${currentUser.username}` : '';
+  fetchProducts();
+  loadCart();
+}
 
-  // toggle sign up / sign in
-  document.getElementById('toggle-link').addEventListener('click',e=>{
-    e.preventDefault();
-    const title=document.getElementById('auth-title');
-    const submit=document.getElementById('auth-submit');
-    if(submit.textContent==='Sign in'){
-      title.textContent='Sign up';
-      submit.textContent='Sign up';
-    }else{
-      title.textContent='Sign in';
-      submit.textContent='Sign in';
-    }
-  });
-
-  // admin add product
-  const adminBtn=document.getElementById('admin-add-btn');
-  adminBtn.addEventListener('click',openAdminModal);
-  document.getElementById('admin-close').addEventListener('click',closeAdminModal);
-  document.getElementById('admin-form').addEventListener('submit',e=>{
-    e.preventDefault();
-    const name=document.getElementById('admin-name').value.trim();
-    const price=Number(document.getElementById('admin-price').value);
-    const img=document.getElementById('admin-img').value.trim() || 'https://via.placeholder.com/200x150';
-    addProduct(name,price,img);
-    closeAdminModal();
-  });
-
-  // cart
-  document.getElementById('cart-button').addEventListener('click',openCartModal);
-  document.getElementById('cart-close').addEventListener('click',closeCartModal);
-  document.getElementById('clear-cart').addEventListener('click',clearCart);
-  document.getElementById('checkout-btn').addEventListener('click',()=>{ showToast('Checkout complete','success'); clearCart(); });
-
-  // sign out
-  const signOutBtn=document.createElement('button');
-  signOutBtn.textContent='Sign out';
-  signOutBtn.addEventListener('click',signOut);
-  document.getElementById('user-area').appendChild(signOutBtn);
+// --- Init ---
+document.addEventListener('DOMContentLoaded', () => {
+  currentUser = JSON.parse(localStorage.getItem('currentUser')) || null;
+  updateUI();
 });
-
-// update cart counter
-function updateCartCount(){
-  document.getElementById('cart-count').textContent=cart.length;
-}
