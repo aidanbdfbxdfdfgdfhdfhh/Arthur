@@ -148,20 +148,34 @@ header {
 .card button { margin-top:auto; }
 .card button:active { transform: translateY(1px); }
 .remove-product { background:#e53935; color:#fff; border:none; padding:0.4rem 0.6rem; border-radius:4px; cursor:pointer; }
+
+
 .header-text {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  align-items: center;   /* CENTER */
+  text-align: center;    /* CENTER TEXT */
+  margin-top: 0.25rem;
 }
 
 #buy {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 1.4rem;     /* BIGGER */
+  font-weight: 600;
 }
 
 #quality {
-  margin: 0;
-  font-size: 0.85rem;
-  opacity: 0.9;
-  font-style: italic;
+  margin: 0.15rem 0 0;
+  font-size: 1.05rem;    /* STILL CLEAR */
+  font-weight: 400;
+  opacity: 0.95;
+}
+
+@media (max-width: 600px) {
+  #buy {
+    font-size: 1.15rem;
+  }
+  #quality {
+    font-size: 0.95rem;
+  }
 }
