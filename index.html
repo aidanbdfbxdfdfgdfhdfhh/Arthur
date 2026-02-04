@@ -9,14 +9,13 @@
 <body>
   <header>
     <h1>PC Store</h1>
-    <h2 id="buy">Buy fast or miss out — only one of each</h2>
+    <h2 id="buy">Buy fast or miss out, only one of each!</h2>
     <div class="header-right">
-      <button class="cart" id="cart-button" aria-label="View cart">Cart: <span id="cart-count">0</span></button>
+      <button class="cart" id="cart-button">Cart: <span id="cart-count">0</span></button>
       <div id="user-area">
-        <button id="auth-btn" type="button">Sign in / Create account</button>
-        <button id="admin-add-btn" class="hidden" type="button">Add product</button>
+        <button id="auth-btn">Sign in / Sign up</button>
+        <button id="admin-add-btn" class="hidden">Add product</button>
         <span id="current-user-banner" class="hidden"></span>
-        <button id="logout-btn" class="hidden">Sign out</button>
       </div>
     </div>
   </header>
@@ -24,10 +23,10 @@
   <main id="product-list" class="grid"></main>
 
   <footer>
-    <small>Simple demo store — no real purchases.</small>
+    <small>Demo PC store — no real purchases.</small>
   </footer>
 
-  <!-- Auth Modal -->
+  <!-- Auth modal -->
   <div id="auth-modal" class="modal hidden">
     <div class="modal-content">
       <button class="close" id="auth-close">&times;</button>
@@ -41,21 +40,21 @@
     </div>
   </div>
 
-  <!-- Admin Modal -->
+  <!-- Admin add product modal -->
   <div id="admin-modal" class="modal hidden">
     <div class="modal-content">
       <button class="close" id="admin-close">&times;</button>
       <h2>Add product</h2>
       <form id="admin-form">
         <input id="admin-name" placeholder="Product name" required>
-        <input id="admin-price" placeholder="Price" inputmode="decimal" required>
+        <input id="admin-price" placeholder="Price" type="number" min="1" required>
         <input id="admin-img" placeholder="Image URL (optional)">
         <button type="submit">Add product</button>
       </form>
     </div>
   </div>
 
-  <!-- Cart Modal -->
+  <!-- Cart modal -->
   <div id="cart-modal" class="modal hidden">
     <div class="modal-content cart-modal">
       <button class="close" id="cart-close">&times;</button>

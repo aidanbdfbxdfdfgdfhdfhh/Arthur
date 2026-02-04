@@ -1,315 +1,306 @@
-const API = 'https://backend-67bt.onrender.com';
-
+const API_BASE = 'https://backend-67bt.onrender.com';
 let currentUser = null;
+let authToken = null;
 let products = [];
 let cart = [];
 
-// ------------------- UTILITIES -------------------
-function showToast(message, type='info') {
-  let t = document.getElementById('toast');
-  if (!t) {
-    t = document.createElement('div');
-    t.id = 'toast';
-    t.className = 'toast';
-    document.body.appendChild(t);
-  }
-  t.textContent = message;
+// ---------------------------
+// Toast helper
+function showToast(msg, type='info'){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
   t.className = `toast show ${type}`;
-  clearTimeout(t._hideTimer);
-  t._hideTimer = setTimeout(() => { t.className = 'toast hidden'; }, 3000);
+  clearTimeout(t._hide);
+  t._hide = setTimeout(()=> t.className='toast hidden',3000);
 }
 
-function updateCartCount() {
-  const el = document.getElementById('cart-count');
-  if (el) el.textContent = cart.length;
-}
-
-function displayNameFor(user) {
-  return user.displayName || user.username;
-}
-
-// ------------------- AUTH -------------------
-async function signIn(username, password) {
-  try {
-    const res = await fetch(`${API}/signin`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
-    });
-    const data = await res.json();
-    if (data.error) { showToast(data.error, 'error'); return false; }
-    currentUser = data;
-    localStorage.setItem('pcstore-current-user', JSON.stringify(currentUser));
-    showToast(`Welcome back, ${displayNameFor(currentUser)}!`, 'success');
-    await loadUserCart();
-    updateUserUI();
-    renderProducts();
-    return true;
-  } catch(e) { showToast('Sign in failed', 'error'); console.error(e); return false; }
-}
-
-async function signUp(username, password) {
-  try {
-    const res = await fetch(`${API}/signup`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
-    });
-    const data = await res.json();
-    if (data.error) { showToast(data.error, 'error'); return false; }
-    currentUser = data;
-    localStorage.setItem('pcstore-current-user', JSON.stringify(currentUser));
-    showToast(`Account created — welcome, ${displayNameFor(currentUser)}!`, 'success');
-    await loadUserCart();
-    updateUserUI();
-    renderProducts();
-    return true;
-  } catch(e) { showToast('Sign up failed', 'error'); console.error(e); return false; }
-}
-
-function signOut() {
-  currentUser = null;
-  localStorage.removeItem('pcstore-current-user');
-  cart = [];
-  updateCartCount();
-  updateUserUI();
-  renderProducts();
-  showToast('Signed out', 'info');
-}
-
-function updateUserUI() {
-  const authBtn = document.getElementById('auth-btn');
-  const adminBtn = document.getElementById('admin-add-btn');
-  const banner = document.getElementById('current-user-banner');
-
-  if (currentUser) {
-    if (authBtn) authBtn.style.display = 'none';
-    if (banner) { banner.textContent = `Signed in: ${displayNameFor(currentUser)}`; banner.classList.remove('hidden'); }
-    if (adminBtn) { adminBtn.style.display = currentUser.isAdmin ? 'inline-block' : 'none'; }
-  } else {
-    if (authBtn) authBtn.style.display = 'inline-block';
-    if (banner) { banner.textContent = ''; banner.classList.add('hidden'); }
-    if (adminBtn) { adminBtn.style.display = 'none'; }
-  }
-}
-
-// ------------------- PRODUCTS -------------------
-async function fetchProducts() {
-  try {
-    const res = await fetch(`${API}/products`);
+// ---------------------------
+// Fetch products from backend
+async function loadProducts(){
+  try{
+    const res = await fetch(`${API_BASE}/products`);
     products = await res.json();
     renderProducts();
-  } catch(e) { showToast('Failed to fetch products', 'error'); console.error(e); }
+  }catch(e){
+    showToast('Could not load products','error');
+  }
 }
 
-async function addProduct(name, price, img) {
-  if (!currentUser || !currentUser.isAdmin) { showToast('Only admins can add products', 'error'); return; }
-  try {
-    const res = await fetch(`${API}/products`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, price, img })
-    });
-    const newProduct = await res.json();
-    products.push(newProduct);
-    renderProducts();
-    showToast('Product added', 'success');
-  } catch(e) { showToast('Failed to add product', 'error'); console.error(e); }
-}
-
-async function removeProduct(id) {
-  if (!currentUser || !currentUser.isAdmin) { showToast('Only admins can remove products', 'error'); return; }
-  try {
-    await fetch(`${API}/products/${id}`, { method: 'DELETE' });
-    products = products.filter(p => p.id !== id);
-    renderProducts();
-    await loadUserCart(); // reload cart from server
-    showToast('Product removed', 'info');
-  } catch(e) { showToast('Failed to remove product', 'error'); console.error(e); }
-}
-
-function renderProducts() {
+// ---------------------------
+// Render products
+function renderProducts(){
   const list = document.getElementById('product-list');
-  if (!list) return;
-  list.innerHTML = '';
-  products.forEach(p => {
+  list.innerHTML='';
+  products.forEach(p=>{
     const card = document.createElement('div');
-    card.className = 'card';
-    card.innerHTML = `
-      <img src="${p.img || 'https://via.placeholder.com/400x300?text=No+Image'}" alt="${p.name}">
+    card.className='card';
+    card.innerHTML=`
+      <img src="${p.img}" alt="${p.name}">
       <h3>${p.name}</h3>
       <p class="price">$${p.price.toFixed(2)}</p>
       <div class="card-actions"></div>
     `;
     list.appendChild(card);
     const actions = card.querySelector('.card-actions');
+
     const addBtn = document.createElement('button');
-    addBtn.textContent = 'Add to cart';
-    addBtn.addEventListener('click', () => addToCart(p.id));
+    addBtn.textContent='Add to cart';
+    addBtn.addEventListener('click',()=>addToCart(p.id));
     actions.appendChild(addBtn);
 
-    if (currentUser && currentUser.isAdmin) {
-      const rmBtn = document.createElement('button');
-      rmBtn.textContent = 'Remove product';
-      rmBtn.className = 'remove-product';
-      rmBtn.addEventListener('click', () => removeProduct(p.id));
-      actions.appendChild(rmBtn);
+    if(currentUser?.isAdmin){
+      const rm = document.createElement('button');
+      rm.textContent='Remove product';
+      rm.className='remove-product';
+      rm.addEventListener('click',()=>removeProduct(p.id));
+      actions.appendChild(rm);
     }
   });
 }
 
-// ------------------- CART -------------------
-async function loadUserCart() {
-  if (!currentUser) { cart = []; updateCartCount(); return; }
-  try {
-    const res = await fetch(`${API}/cart?userId=${currentUser.id}`);
-    cart = await res.json();
-    updateCartCount();
-  } catch(e) { showToast('Failed to load cart', 'error'); console.error(e); }
-}
-
-async function addToCart(productId) {
-  if (!currentUser) { openAuthModal('signin'); return; }
-  try {
-    const res = await fetch(`${API}/cart`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: currentUser.id, productId })
+// ---------------------------
+// Auth
+async function signIn(username,password){
+  try{
+    const res = await fetch(`${API_BASE}/auth/signin`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({username,password})
     });
-    cart = await res.json();
-    updateCartCount();
-    showToast('Added to cart', 'success');
-  } catch(e) { showToast('Failed to add to cart', 'error'); console.error(e); }
+    if(!res.ok) throw new Error('Sign in failed');
+    const data = await res.json();
+    currentUser = data.user;
+    authToken = data.token;
+    updateUserUI();
+    loadCart();
+    showToast(`Welcome, ${currentUser.username}`,'success');
+    closeAuthModal();
+  }catch(e){
+    showToast(e.message,'error');
+  }
 }
 
-async function removeFromCart(productId, count=1) {
-  if (!currentUser) return;
-  try {
-    const res = await fetch(`${API}/cart`, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: currentUser.id, productId, count })
+async function signUp(username,password){
+  try{
+    const res = await fetch(`${API_BASE}/auth/signup`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({username,password})
     });
-    cart = await res.json();
-    renderCart();
-    updateCartCount();
-    showToast('Cart updated', 'info');
-  } catch(e) { showToast('Failed to remove from cart', 'error'); console.error(e); }
+    if(!res.ok) throw new Error('Sign up failed');
+    const data = await res.json();
+    currentUser = data.user;
+    authToken = data.token;
+    updateUserUI();
+    loadCart();
+    showToast(`Account created, welcome ${currentUser.username}`,'success');
+    closeAuthModal();
+  }catch(e){
+    showToast(e.message,'error');
+  }
 }
 
-function renderCart() {
+function signOut(){
+  currentUser=null;
+  authToken=null;
+  cart=[];
+  updateUserUI();
+  showToast('Signed out','info');
+  renderProducts();
+}
+
+// ---------------------------
+// Update UI
+function updateUserUI(){
+  const authBtn=document.getElementById('auth-btn');
+  const banner=document.getElementById('current-user-banner');
+  const adminBtn=document.getElementById('admin-add-btn');
+
+  if(currentUser){
+    authBtn.style.display='none';
+    banner.textContent=`Signed in: ${currentUser.username}`;
+    banner.classList.remove('hidden');
+    if(currentUser.isAdmin) adminBtn.classList.remove('hidden');
+    else adminBtn.classList.add('hidden');
+  }else{
+    authBtn.style.display='inline-block';
+    banner.classList.add('hidden');
+    adminBtn.classList.add('hidden');
+  }
+}
+
+// ---------------------------
+// Cart functions
+async function loadCart(){
+  if(!currentUser) return;
+  try{
+    const res=await fetch(`${API_BASE}/cart`,{
+      headers:{'Authorization':`Bearer ${authToken}`}
+    });
+    cart=await res.json();
+    updateCartCount();
+  }catch(e){
+    showToast('Could not load cart','error');
+  }
+}
+
+async function addToCart(productId){
+  if(!currentUser){ openAuthModal(); return; }
+  try{
+    await fetch(`${API_BASE}/cart/add`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':`Bearer ${authToken}`},
+      body:JSON.stringify({productId})
+    });
+    await loadCart();
+    showToast('Added to cart','success');
+  }catch(e){ showToast('Failed to add','error'); }
+}
+
+async function removeFromCart(productId){
+  try{
+    await fetch(`${API_BASE}/cart/remove`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':`Bearer ${authToken}`},
+      body:JSON.stringify({productId, qty:1})
+    });
+    await loadCart();
+  }catch(e){}
+}
+
+async function clearCart(){
+  try{
+    await fetch(`${API_BASE}/cart/clear`,{
+      method:'POST',
+      headers:{'Authorization':`Bearer ${authToken}`}
+    });
+    await loadCart();
+  }catch(e){}
+}
+
+// ---------------------------
+// Admin functions
+async function addProduct(name,price,img){
+  try{
+    const res = await fetch(`${API_BASE}/products`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':`Bearer ${authToken}`},
+      body:JSON.stringify({name,price,img})
+    });
+    if(!res.ok) throw new Error('Failed');
+    await loadProducts();
+    showToast('Product added','success');
+  }catch(e){ showToast(e.message,'error'); }
+}
+
+async function removeProduct(id){
+  try{
+    const res = await fetch(`${API_BASE}/products/${id}`,{
+      method:'DELETE',
+      headers:{'Authorization':`Bearer ${authToken}`}
+    });
+    if(!res.ok) throw new Error('Failed');
+    await loadProducts();
+    showToast('Product removed','info');
+  }catch(e){ showToast(e.message,'error'); }
+}
+
+// ---------------------------
+// Modals
+function openAuthModal(){ document.getElementById('auth-modal').classList.remove('hidden'); }
+function closeAuthModal(){ document.getElementById('auth-modal').classList.add('hidden'); }
+function openAdminModal(){ document.getElementById('admin-modal').classList.remove('hidden'); }
+function closeAdminModal(){ document.getElementById('admin-modal').classList.add('hidden'); }
+function openCartModal(){ document.getElementById('cart-modal').classList.remove('hidden'); renderCartModal(); }
+function closeCartModal(){ document.getElementById('cart-modal').classList.add('hidden'); }
+
+function renderCartModal(){
   const container = document.getElementById('cart-items');
   const totalEl = document.getElementById('cart-total');
-  if (!container || !totalEl) return;
-  container.innerHTML = '';
-  if (!cart || cart.length === 0) {
-    container.innerHTML = '<p>Your cart is empty.</p>';
-    totalEl.textContent = '0.00';
-    return;
-  }
-  const groups = {};
-  cart.forEach(p => {
-    if (!groups[p.id]) groups[p.id] = { ...p, qty: 0 };
-    groups[p.id].qty++;
-  });
-  const fragment = document.createDocumentFragment();
-  Object.values(groups).forEach(item => {
-    const div = document.createElement('div');
-    div.className = 'cart-item';
-    div.innerHTML = `
+  container.innerHTML='';
+  if(cart.length===0){ container.innerHTML='<p>Your cart is empty</p>'; totalEl.textContent='0.00'; return; }
+  let total=0;
+  cart.forEach(item=>{
+    total+=item.price;
+    const div=document.createElement('div');
+    div.className='cart-item';
+    div.innerHTML=`
       <img src="${item.img}" alt="${item.name}">
       <div class="cart-item-info">
         <div class="name">${item.name}</div>
-        <div class="meta">$${item.price.toFixed(2)} × ${item.qty} = $${(item.price*item.qty).toFixed(2)}</div>
+        <div class="meta">$${item.price.toFixed(2)}</div>
       </div>
       <div class="cart-item-actions">
         <button data-id="${item.id}" class="remove-one">Remove 1</button>
-        <button data-id="${item.id}" class="remove-all">Remove all</button>
       </div>
     `;
-    fragment.appendChild(div);
+    container.appendChild(div);
   });
-  container.appendChild(fragment);
-
-  const total = cart.reduce((s,p)=> s+p.price,0);
-  totalEl.textContent = total.toFixed(2);
-
-  container.querySelectorAll('.remove-one').forEach(btn => btn.addEventListener('click', e => {
-    removeFromCart(Number(e.target.dataset.id), 1);
-  }));
-  container.querySelectorAll('.remove-all').forEach(btn => btn.addEventListener('click', e => {
-    removeFromCart(Number(e.target.dataset.id), Infinity);
-  }));
+  totalEl.textContent=total.toFixed(2);
+  container.querySelectorAll('.remove-one').forEach(btn=>{
+    btn.addEventListener('click',()=> removeFromCart(Number(btn.dataset.id)));
+  });
 }
 
-// ------------------- MODALS -------------------
-function openAuthModal(mode='signin') {
-  const authModal = document.getElementById('auth-modal');
-  const authTitle = document.getElementById('auth-title');
-  const authSubmit = document.getElementById('auth-submit');
-  const authToggleText = document.getElementById('auth-toggle');
-  authModal.classList.remove('hidden');
-  authTitle.textContent = mode === 'signin' ? 'Sign in' : 'Create account';
-  authSubmit.textContent = mode === 'signin' ? 'Sign in' : 'Create account';
-  authToggleText.innerHTML = mode === 'signin' 
-    ? `Don't have an account? <a href="#" id="toggle-link">Create one</a>` 
-    : `Have an account? <a href="#" id="toggle-link">Sign in</a>`;
-  document.getElementById('toggle-link').onclick = e => {
+// ---------------------------
+// Event listeners
+document.addEventListener('DOMContentLoaded',()=>{
+  loadProducts();
+
+  // auth
+  const authBtn=document.getElementById('auth-btn');
+  authBtn.addEventListener('click',openAuthModal);
+  document.getElementById('auth-close').addEventListener('click',closeAuthModal);
+  document.getElementById('auth-form').addEventListener('submit',e=>{
     e.preventDefault();
-    openAuthModal(mode==='signin' ? 'signup':'signin');
-  };
-}
+    const username=document.getElementById('auth-username').value.trim();
+    const password=document.getElementById('auth-password').value;
+    const mode=document.getElementById('auth-submit').textContent.toLowerCase();
+    if(mode==='sign in') signIn(username,password);
+    else signUp(username,password);
+  });
 
-function closeAuthModal() {
-  const authModal = document.getElementById('auth-modal');
-  authModal.classList.add('hidden');
-  document.getElementById('auth-form').reset();
-}
-
-function openCartModal() { document.getElementById('cart-modal').classList.remove('hidden'); renderCart(); }
-function closeCartModal() { document.getElementById('cart-modal').classList.add('hidden'); }
-
-// ------------------- INIT -------------------
-document.addEventListener('DOMContentLoaded', async () => {
-  // restore user
-  const saved = localStorage.getItem('pcstore-current-user');
-  if (saved) currentUser = JSON.parse(saved);
-
-  await fetchProducts();
-  await loadUserCart();
-  updateUserUI();
-
-  // AUTH bindings
-  document.getElementById('auth-btn').addEventListener('click', () => openAuthModal('signin'));
-  document.getElementById('auth-close').addEventListener('click', closeAuthModal);
-  document.getElementById('auth-form').addEventListener('submit', async e => {
+  // toggle sign up / sign in
+  document.getElementById('toggle-link').addEventListener('click',e=>{
     e.preventDefault();
-    const username = document.getElementById('auth-username').value.trim();
-    const password = document.getElementById('auth-password').value;
-    const mode = document.getElementById('auth-submit').textContent.toLowerCase().includes('create') ? 'signup' : 'signin';
-    if (mode==='signin') await signIn(username,password);
-    else await signUp(username,password);
-    closeAuthModal();
+    const title=document.getElementById('auth-title');
+    const submit=document.getElementById('auth-submit');
+    if(submit.textContent==='Sign in'){
+      title.textContent='Sign up';
+      submit.textContent='Sign up';
+    }else{
+      title.textContent='Sign in';
+      submit.textContent='Sign in';
+    }
   });
 
-  document.getElementById('user-area').addEventListener('click', e => {
-    if (e.target.id==='logout-btn') signOut();
+  // admin add product
+  const adminBtn=document.getElementById('admin-add-btn');
+  adminBtn.addEventListener('click',openAdminModal);
+  document.getElementById('admin-close').addEventListener('click',closeAdminModal);
+  document.getElementById('admin-form').addEventListener('submit',e=>{
+    e.preventDefault();
+    const name=document.getElementById('admin-name').value.trim();
+    const price=Number(document.getElementById('admin-price').value);
+    const img=document.getElementById('admin-img').value.trim() || 'https://via.placeholder.com/200x150';
+    addProduct(name,price,img);
+    closeAdminModal();
   });
 
-  // ADMIN bindings
-  document.getElementById('admin-add-btn').addEventListener('click', () => {
-    const name = prompt('Product name:');
-    const price = parseFloat(prompt('Price:'));
-    const img = prompt('Image URL (optional):');
-    if (name && !isNaN(price)) addProduct(name, price, img);
-  });
+  // cart
+  document.getElementById('cart-button').addEventListener('click',openCartModal);
+  document.getElementById('cart-close').addEventListener('click',closeCartModal);
+  document.getElementById('clear-cart').addEventListener('click',clearCart);
+  document.getElementById('checkout-btn').addEventListener('click',()=>{ showToast('Checkout complete','success'); clearCart(); });
 
-  // CART bindings
-  document.getElementById('cart-button').addEventListener('click', openCartModal);
-  document.getElementById('cart-close').addEventListener('click', closeCartModal);
-  document.getElementById('clear-cart').addEventListener('click', async () => {
-    for (const p of cart) await removeFromCart(p.id, Infinity);
-    showToast('Cart cleared', 'info');
-  });
-  document.getElementById('checkout-btn').addEventListener('click', () => showToast('Checkout not implemented', 'info'));
+  // sign out
+  const signOutBtn=document.createElement('button');
+  signOutBtn.textContent='Sign out';
+  signOutBtn.addEventListener('click',signOut);
+  document.getElementById('user-area').appendChild(signOutBtn);
 });
+
+// update cart counter
+function updateCartCount(){
+  document.getElementById('cart-count').textContent=cart.length;
+}
